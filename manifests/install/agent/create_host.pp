@@ -10,7 +10,7 @@ class checkmk::install::agent::create_host {
     ]
   )
 
-  notify { 'Checkmk host created':
+  checkmk_status { 'Checkmk host created':
     message  => $host_created,
     loglevel => debug,
   }

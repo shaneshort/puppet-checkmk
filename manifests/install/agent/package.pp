@@ -10,7 +10,7 @@ class checkmk::install::agent::package {
     ]
   )
 
-  notify { 'Checkmk agent downloaded':
+  checkmk_status { 'Checkmk agent downloaded':
     message  => $package_downloaded,
     loglevel => debug,
   }

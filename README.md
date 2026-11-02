@@ -1,5 +1,20 @@
 # checkmk
 
+## Quiet bootstrap patch (based on 0.2.1)
+
+This branch replaces the two bootstrap `notify` resources with `checkmk_status`.
+It still evaluates the existing deferred host-creation and agent-download
+functions on every run and logs their results at debug level, but status messages
+no longer count as Puppet changes. Package installation and agent registration
+keep their existing resources and ordering.
+
+This is a reporting-only patch: the deferred functions retain their original
+behavior and error handling. Their side effects are not tracked as resource
+changes by `checkmk_status`.
+
+The isolated regression tests need Puppet and RSpec and do not contact a real
+Checkmk server: `rspec spec/integration/quiet_bootstrap_spec.rb`.
+
 ## Description
 
 Provisions the [CheckMK](https://checkmk.com/) server and client.
