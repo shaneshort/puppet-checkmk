@@ -2,6 +2,7 @@
 
 require 'spec_helper'
 require 'English'
+require 'open3'
 require_relative '../support/transaction_helpers'
 require_relative '../support/fake_agent_host'
 
@@ -23,19 +24,30 @@ describe 'checkmk', type: :class, transaction: true do
       'agent_folder' => '/linux',
     }
   end
-  let(:host) { FakeAgentHost.new(server_version: '2.2.0p10-1') }
+  # Every example gets its own directory; the manifest's /tmp/check-mk-agent.deb is rewritten onto it.
+  let(:package_dir) { Dir.mktmpdir('checkmk-lifecycle-pkg') }
+  let(:deb_path) { File.join(package_dir, 'check-mk-agent.deb') }
+  let(:host) { FakeAgentHost.new(server_version: '2.2.0p10-1', deb_path: deb_path) }
   let(:api) { 'http://cmk.example.com/mysite/check_mk/api/1.0' }
-  let(:agent_ref) { "Agent_package[#{FakeAgentHost::DEB_PATH}]" }
+  let(:agent_ref) { "Agent_package[#{deb_path}]" }
   let(:package_ref) { 'Package[check-mk-agent]' }
   let(:host_ref) { "Create_host[#{hostname}]" }
   let(:register_ref) { 'Exec[register checkmk agent]' }
   let(:upgrade_ref) { 'Exec[upgrade checkmk agent]' }
 
   let(:catalog) do
-    cat = catalogue
+    cat = repoint(catalogue, '/tmp/check-mk-agent.deb', deb_path)
     cat.resource('Package', 'check-mk-agent')[:provider] = 'checkmk_fake'
     cat.resources.select { |resource| resource.type == 'Exec' }.each { |resource| resource[:provider] = 'shell' }
     cat
+  end
+
+  # Rewrites every reference to the manifest's hard-coded package path (resource title, package source, exec
+  # command/guard, relationships) by round-tripping the compiled catalogue through its serialised form.
+  def repoint(compiled, from, to)
+    data = JSON.parse(compiled.to_data_hash.to_json.gsub(from, to))
+    expect(JSON.generate(data)).not_to include(from)
+    Puppet::Resource::Catalog.from_data_hash(data)
   end
 
   def apply(noop: false)
@@ -43,10 +55,6 @@ describe 'checkmk', type: :class, transaction: true do
   end
 
   before do
-    # The manifest hard-codes this path. Never touch a file we did not create.
-    skip "refusing to use #{FakeAgentHost::DEB_PATH}: it already exists" if File.exist?(FakeAgentHost::DEB_PATH)
-    @owns_deb = true
-
     isolate_puppet_state(Dir.mktmpdir('checkmk-lifecycle'))
     FakeAgentHost.current = host
     allow(Puppet::Util::Execution).to receive(:execute) { |command, options| host.execute(command, options) }
@@ -63,7 +71,7 @@ describe 'checkmk', type: :class, transaction: true do
 
   after do
     FakeAgentHost.current = nil
-    File.delete(FakeAgentHost::DEB_PATH) if @owns_deb && File.exist?(FakeAgentHost::DEB_PATH)
+    FileUtils.remove_entry(package_dir) if File.directory?(package_dir)
   end
 
   context 'agent lifecycle on a fresh node' do
@@ -144,9 +152,9 @@ describe 'checkmk', type: :class, transaction: true do
     # Runs the manifest's real `unless` string in /bin/sh, with dpkg stubs that insist on the exact arguments,
     # so quoting mistakes in the manifest cannot hide behind the fake host.
     def guard_exit_status(deb_version:, installed_version:)
-      guard = catalogue.resource('Exec', 'upgrade checkmk agent')[:unless]
+      guard = catalog.resource('Exec', 'upgrade checkmk agent')[:unless]
       Dir.mktmpdir('checkmk-guard') do |bin|
-        write_stub(bin, 'dpkg-deb', '[ "$1 $2 $3" = "-f /tmp/check-mk-agent.deb Version" ] || exit 2; echo "$DEB_VERSION"')
+        write_stub(bin, 'dpkg-deb', %([ "$1 $2 $3" = "-f #{deb_path} Version" ] || exit 2; echo "$DEB_VERSION"))
         write_stub(bin, 'dpkg-query', %q([ "$1 $2 $3" = '-W -f=${Version} check-mk-agent' ] || exit 2; printf "%s" "$INSTALLED_VERSION"))
         env = { 'PATH' => "#{bin}:/usr/bin:/bin", 'DEB_VERSION' => deb_version, 'INSTALLED_VERSION' => installed_version }
         system(env, '/bin/sh', '-c', guard)
@@ -166,6 +174,47 @@ describe 'checkmk', type: :class, transaction: true do
 
     it 'exits 1 (run the install) when the downloaded package differs from the installed one' do
       expect(guard_exit_status(deb_version: '2.2.0p12-1', installed_version: '2.2.0p10-1')).to eq(1)
+    end
+  end
+
+  # Real dpkg/apt on the distributions in metadata.json. Needs Docker, so it is opt-in (RUN_DOCKER_SPECS=1);
+  # when requested and Docker is unavailable it fails rather than skipping.
+  context 'agent lifecycle upgrade of a package with a locally modified config file (real Debian/Ubuntu)' do
+    images = ['debian:10', 'debian:11', 'debian:12', 'ubuntu:18.04', 'ubuntu:20.04', 'ubuntu:22.04']
+
+    def install_command
+      catalogue.resource('Exec', 'upgrade checkmk agent')[:command].gsub('/tmp/check-mk-agent.deb', '{DEB}')
+    end
+
+    # check-mk-agent 2.2.0p10-1 installed, config edited by the admin, server now offers 2.2.0p12-1
+    def run_scenario(image, command)
+      output, status = Open3.capture2e('docker', 'run', '--rm', '-v', "#{File.expand_path('../support', __dir__)}:/t:ro", image, '/t/conffile_scenario.sh', command)
+      raise "docker run failed for #{image}: #{output}" unless status.success?
+
+      match = output.match(%r{exit=(\d+) installed=(\S+) conffile=\[(.*)\]})
+      raise "unexpected scenario output for #{image}: #{output}" unless match
+
+      { exit: match[1].to_i, installed: match[2], conffile: match[3], output: output }
+    end
+
+    before do
+      skip 'set RUN_DOCKER_SPECS=1 to run the real Debian/Ubuntu package tests (needs Docker)' unless ENV['RUN_DOCKER_SPECS']
+      raise 'RUN_DOCKER_SPECS is set but Docker is not available' unless system('docker info > /dev/null 2>&1')
+    end
+
+    images.each do |image|
+      it "#{image}: upgrades and keeps the locally modified config file" do
+        result = run_scenario(image, install_command)
+
+        expect(result).to include(exit: 0, installed: '2.2.0p12-1', conffile: 'local-edit=keep-me')
+      end
+
+      it "#{image}: control - without the conffile option the same upgrade fails" do
+        command = install_command.sub(' -o DPkg::Options::=--force-confold', '')
+        expect(command).not_to eq(install_command)
+
+        expect(run_scenario(image, command)[:exit]).not_to eq(0)
+      end
     end
   end
 end

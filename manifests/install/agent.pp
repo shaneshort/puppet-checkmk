@@ -21,9 +21,11 @@ class checkmk::install::agent {
       # downloads a package for a different agent version (an upgrade, or a downgrade to the server's
       # version) it has to be installed explicitly. refreshonly + the `unless` guard means this does
       # nothing on a first install (the package resource has just installed that same version) and
-      # nothing on a run where no package was downloaded.
+      # nothing on a run where no package was downloaded. --force-confold keeps locally modified
+      # configuration files (what Puppet's apt provider does for `configfiles => keep`); without it dpkg
+      # stops at the conffile prompt and the install fails even with DEBIAN_FRONTEND=noninteractive.
       exec { 'upgrade checkmk agent':
-        command     => 'apt-get install -y --allow-downgrades /tmp/check-mk-agent.deb',
+        command     => 'apt-get install -y --allow-downgrades -o DPkg::Options::=--force-confold /tmp/check-mk-agent.deb',
         provider    => 'shell',
         path        => ['/usr/local/sbin', '/usr/local/bin', '/usr/sbin', '/usr/bin', '/sbin', '/bin'],
         environment => ['DEBIAN_FRONTEND=noninteractive'],

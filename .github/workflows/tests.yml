@@ -1,23 +1,6 @@
 name: zaben-checkmk tests
 on: [push]
 jobs:
-  validate_lint_check_rubocop-Ruby_2-5-7-Puppet_6:
-    runs-on: ruby:2.5.7
-    env:
-      PUPPET_GEM_VERSION: '~> 6'
-    steps:
-      - uses: ./.github/before_script
-      - name: Run validate lint check rubocop
-        run: bundle exec rake validate lint check rubocop
-  parallel_spec-Ruby_2-5-7-Puppet_6:
-    runs-on: ruby:2.5.7
-    needs: [validate_lint_check_rubocop-Ruby_2-5-7-Puppet_6]
-    env:
-      PUPPET_GEM_VERSION: '~> 6'
-    steps:
-      - uses: ./.github/before_script
-      - name: Run parallel_spec
-        run: bundle exec rake parallel_spec
   validate_lint_check_rubocop-Ruby_2-7-2-Puppet_7:
     runs-on: ruby:2.7.2
     env:
@@ -35,3 +18,33 @@ jobs:
       - uses: ./.github/before_script
       - name: Run parallel_spec
         run: bundle exec rake parallel_spec
+  parallel_spec-Ruby_2-7-2-Puppet_7-resource_api_minimum:
+    # The minimum puppet-resource_api the types support (1.8.14, first bundled by puppet-agent 7.8.0).
+    # Puppet 7.8.0 itself is not pinned here: it no longer boots with current gem releases (openssl, concurrent-ruby).
+    runs-on: ruby:2.7.2
+    needs: [validate_lint_check_rubocop-Ruby_2-7-2-Puppet_7]
+    env:
+      PUPPET_GEM_VERSION: '~> 7'
+      RESOURCE_API_GEM_VERSION: '1.8.14'
+    steps:
+      - uses: ./.github/before_script
+      - name: Run parallel_spec
+        run: bundle exec rake parallel_spec
+  package_specs-Debian_Ubuntu:
+    # Real dpkg/apt upgrade tests in containers (needs Docker)
+    runs-on: ubuntu-latest
+    needs: [validate_lint_check_rubocop-Ruby_2-7-2-Puppet_7]
+    env:
+      PUPPET_GEM_VERSION: '~> 7'
+      RUN_DOCKER_SPECS: '1'
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '2.7'
+      - name: Install gems
+        run: |
+          rm Gemfile.lock || true
+          bundle install --without system_tests --jobs $(nproc)
+      - name: Run package upgrade specs
+        run: bundle exec rspec spec/classes/checkmk_agent_lifecycle_spec.rb
