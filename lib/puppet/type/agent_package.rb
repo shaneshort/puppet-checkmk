@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 require 'puppet/resource_api'
-require 'puppet_x/checkmk/requirements'
+# Relative, not via $LOAD_PATH: Puppet Server does not put a module's lib/ directory on the load path.
+require_relative '../../puppet_x/checkmk/requirements'
 
 PuppetX::Checkmk::Requirements.verify_resource_api!
 

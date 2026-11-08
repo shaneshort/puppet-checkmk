@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require 'open3'
+require 'rbconfig'
 require 'puppet_x/checkmk/requirements'
 
 RSpec.describe PuppetX::Checkmk::Requirements do
@@ -29,6 +31,27 @@ RSpec.describe PuppetX::Checkmk::Requirements do
       allow(described_class).to receive(:verify_resource_api!).and_raise(Puppet::Error, 'unsupported')
 
       expect { load File.expand_path("../../../../lib/puppet/type/#{type}.rb", __dir__) }.to raise_error(Puppet::Error, 'unsupported')
+    end
+  end
+
+  # Puppet Server runs module Ruby code in JRuby and does not add a module's lib/ directory to $LOAD_PATH, so the type
+  # files must locate the helper relative to themselves. (Rspec, `puppet apply` and agents all do have lib/ on the path,
+  # which is how this once slipped through.) A clean Ruby process reproduces the Puppet Server condition.
+  %w[agent_package create_host].each do |type|
+    it "loads the #{type} type when the module's lib directory is not on $LOAD_PATH" do
+      lib = File.expand_path('../../../../lib', __dir__)
+      script = <<~RUBY
+        require 'puppet'
+        Puppet.initialize_settings
+        module_lib = #{lib.inspect}
+        abort "setup error: module lib is on $LOAD_PATH" if $LOAD_PATH.any? { |entry| File.expand_path(entry) == module_lib }
+        load File.join(module_lib, 'puppet', 'type', #{type.inspect} + '.rb')
+        puts 'TYPE LOADED'
+      RUBY
+
+      output, = Open3.capture2e(RbConfig.ruby, '-e', script)
+
+      expect(output).to include('TYPE LOADED'), output
     end
   end
 end

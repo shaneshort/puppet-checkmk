@@ -4,6 +4,14 @@
 
 **Bugfixes**
 
+- Fix catalogue compilation failing on Puppet Server with `Could not autoload puppet/type/agent_package: no such file
+  to load -- puppet_x/checkmk/requirements`. Puppet Server (JRuby) does not put a module's `lib/` directory on
+  `$LOAD_PATH`, so the types now load their helper with `require_relative`. This broke every node using the module
+  after the Resource API requirement check was added; rspec, `puppet apply` and agents all have `lib/` on the path, so
+  none of the earlier tests saw it. A regression spec now loads each type in a clean Ruby process without the module on
+  the load path. Verified on real Puppet Servers (7.9.2: compiles; 7.1.0 with an old Resource API: explicit
+  requirement error).
+
 - `agent_package` and `create_host` no longer report a change on every run. Their providers returned the resource
   as `name`, but the types use `file_name`/`host_name` as their namevar, so the Resource API never matched the
   current state and always treated the resource as `absent`. A repeat run (or noop) on a host that is already
