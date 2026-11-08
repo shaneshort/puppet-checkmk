@@ -38,6 +38,11 @@ checkmk::cmkadmin_user_password: 'changeme123'
 checkmk::automation_user_password: 'changeme456'
 ```
 
+## Requirements
+
+Puppet (agent and server) 7.8.0 or later. The `agent_package` and `create_host` types need puppet-resource_api 1.8.14 or later,
+which puppet-agent bundles from 7.8.0 (and from 6.23.0). Older versions are rejected with an explicit error when the types load.
+
 ## Limitations
 
 Currently only tested and supported Debian based systems.

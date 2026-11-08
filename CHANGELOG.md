@@ -27,17 +27,28 @@
   instead of logging a warning and reporting success.
 - Puppet evaluates an in-sync property twice per run, so an installed agent triggers up to two read-only HEAD
   requests per run, and `create_host` one GET.
-- The types now require `puppet-resource_api` >= 1.8.14 (`custom_insync`, and `simple_get_filter` for
-  `agent_package`). This is bundled with Puppet 7.25.
-- Known limitation (unchanged): when the server offers a newer agent, the new package is downloaded, but the
-  `package { 'check-mk-agent': ensure => installed }` resource does not upgrade an installed package, so the
-  download repeats each run until the installed version matches the server.
+- The types now require `puppet-resource_api` >= 1.8.14 (`custom_insync`; `simple_get_filter` for `agent_package`).
+  puppet-agent bundles that from 7.8.0 (and 6.23.0); 6.21-6.22 and 7.0-7.7 bundle 1.8.13. Unsupported versions are
+  now rejected with an explicit error when the types load (previously: `Unknown feature detected` followed by
+  `wrong number of arguments`). `metadata.json` now requires Puppet `>= 7.8.0 < 8.0.0` (was `>= 6.21.0`); Puppet 6
+  was not tested.
+- New `Exec['upgrade checkmk agent']` in `checkmk::install::agent`. `package { ensure => installed }` never upgrades
+  an installed package, so a downloaded package for a different agent version was never installed and was
+  downloaded again on every run. The exec (`refreshonly`, subscribed to `Agent_package`, guarded by a
+  `dpkg-deb`/`dpkg-query` version comparison, using `apt-get install --allow-downgrades`) installs it, so the run
+  converges. It runs after the `package` resource and before agent registration. If the install fails, the run
+  fails, registration is skipped, and the next run retries.
 
 **Testing**
 
 - Replace the stale `get_agent_package` provider spec with specs that drive both types through real Puppet
   transactions, with HTTP (WebMock) and `cmk-agent-ctl --version` stubbed. `webmock` is added as a development
   dependency.
+- Add a lifecycle spec that compiles the real `checkmk` class and applies it as Puppet transactions against a
+  simulated host and Checkmk server: fresh install, then a server-side upgrade (and downgrade, and a failed
+  install), checking the second apply and noop are quiet. The installed version only changes through an install
+  action performed by the module. The spec uses the hard-coded `/tmp/check-mk-agent.deb` and skips itself if that
+  file already exists.
 
 ## Release 0.3.3
 

@@ -35,6 +35,21 @@ module TransactionHelpers
     catalog.apply.report
   end
 
+  # Applies an already compiled (rspec-puppet) catalogue as a real transaction.
+  # A fresh RAL catalogue is built every time, like a new agent run.
+  def apply_catalogue(catalogue, noop: false)
+    Puppet[:noop] = noop
+    ral = catalogue.to_ral
+    # Puppet ignores `noop` for catalogues that are not a host configuration, so be explicit.
+    ral.host_config = true
+    ral.apply.report
+  end
+
+  # References of every resource that reported an event, a change or a failure.
+  def touched(report)
+    report.resource_statuses.select { |_ref, status| status.changed || status.failed || !status.events.empty? }.keys
+  end
+
   def status_of(report, reference)
     report.resource_statuses.fetch(reference)
   end

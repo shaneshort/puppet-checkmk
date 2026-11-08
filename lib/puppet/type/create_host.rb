@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require 'puppet/resource_api'
+require 'puppet_x/checkmk/requirements'
+
+PuppetX::Checkmk::Requirements.verify_resource_api!
 
 Puppet::ResourceApi.register_type(
   name: 'create_host',
@@ -21,7 +24,7 @@ Puppet::ResourceApi.register_type(
     is only created when the API reports it as not found; any other API, authentication or network error fails the
     resource. `ensure => absent` is not implemented and fails if the host exists.
 
-    Requires puppet-resource_api >= 1.8.14 (`custom_insync` feature).
+    Requires puppet-resource_api >= 1.8.14 (puppet-agent >= 7.8.0) (`custom_insync` feature).
   EOS
   features: ['custom_insync'],
   attributes: {
