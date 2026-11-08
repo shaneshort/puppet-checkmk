@@ -4,6 +4,11 @@
 
 **Bugfixes**
 
+- The upgrade `exec` now passes `-o DPkg::Options::=--force-confold` (what Puppet's apt provider does for
+  `configfiles => keep`). Without it, upgrading a package whose configuration file was edited locally made dpkg stop
+  at the conffile prompt and fail with exit 100, even with `DEBIAN_FRONTEND=noninteractive` (reproduced on Debian 10-12
+  and Ubuntu 18.04-22.04). Locally modified configuration is now kept.
+
 - `agent_package` and `create_host` no longer report a change on every run. Their providers returned the resource
   as `name`, but the types use `file_name`/`host_name` as their namevar, so the Resource API never matched the
   current state and always treated the resource as `absent`. A repeat run (or noop) on a host that is already
@@ -28,7 +33,9 @@
 - Puppet evaluates an in-sync property twice per run, so an installed agent triggers up to two read-only HEAD
   requests per run, and `create_host` one GET.
 - The types now require `puppet-resource_api` >= 1.8.14 (`custom_insync`; `simple_get_filter` for `agent_package`).
-  puppet-agent bundles that from 7.8.0 (and 6.23.0); 6.21-6.22 and 7.0-7.7 bundle 1.8.13. Unsupported versions are
+  puppet-agent bundles that from 7.8.0 (and 6.23.0); 6.21-6.22 and 7.0-7.7 bundle 1.8.13. What matters is the
+  puppet-resource_api loaded in the runtime that loads the types (Puppet Server when compiling, the agent when applying),
+  not the `puppetserver` package version. Unsupported versions are
   now rejected with an explicit error when the types load (previously: `Unknown feature detected` followed by
   `wrong number of arguments`). `metadata.json` now requires Puppet `>= 7.8.0 < 8.0.0` (was `>= 6.21.0`); Puppet 6
   was not tested.
@@ -44,6 +51,13 @@
 - Replace the stale `get_agent_package` provider spec with specs that drive both types through real Puppet
   transactions, with HTTP (WebMock) and `cmk-agent-ctl --version` stubbed. `webmock` is added as a development
   dependency.
+- The lifecycle spec now works in its own temporary directory (the manifest's package path is rewritten onto it),
+  so it no longer touches `/tmp`, never skips itself, and concurrent runs cannot collide.
+- Real-package specs (opt-in: `RUN_DOCKER_SPECS=1`, needs Docker) run the manifest's actual install command against
+  dpkg/apt on Debian 10/11/12 and Ubuntu 18.04/20.04/22.04: an upgrade keeps a locally modified config file, and a
+  control run without the option fails.
+- CI: the Puppet 6 jobs are removed (the module requires Puppet >= 7.8.0), a job pins the minimum
+  puppet-resource_api (`RESOURCE_API_GEM_VERSION=1.8.14`), and a job runs the real-package specs.
 - Add a lifecycle spec that compiles the real `checkmk` class and applies it as Puppet transactions against a
   simulated host and Checkmk server: fresh install, then a server-side upgrade (and downgrade, and a failed
   install), checking the second apply and noop are quiet. The installed version only changes through an install

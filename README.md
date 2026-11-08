@@ -40,8 +40,11 @@ checkmk::automation_user_password: 'changeme456'
 
 ## Requirements
 
-Puppet (agent and server) 7.8.0 or later. The `agent_package` and `create_host` types need puppet-resource_api 1.8.14 or later,
-which puppet-agent bundles from 7.8.0 (and from 6.23.0). Older versions are rejected with an explicit error when the types load.
+The `agent_package` and `create_host` types need puppet-resource_api 1.8.14 or later. puppet-agent bundles that from 7.8.0
+(and from 6.23.0); 7.7.0 and earlier bundle 1.8.13. What matters is the Puppet runtime and puppet-resource_api that are
+*loaded* where the types are used: the Puppet Server's own runtime when it compiles the catalogue, and the agent's when it
+applies it. The `puppetserver` package version is not the thing to check.
+Unsupported versions are rejected with an explicit error when the types load. Tested with puppet-agent 7.8.0 and current 7.x.
 
 ## Limitations
 

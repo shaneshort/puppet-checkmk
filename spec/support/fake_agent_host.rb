@@ -11,8 +11,6 @@ require 'puppet/provider/package'
 # exec), never directly by a test, so a spec cannot "pretend" an upgrade
 # happened that the module did not perform.
 class FakeAgentHost
-  DEB_PATH = '/tmp/check-mk-agent.deb'
-
   class << self
     attr_accessor :current
   end
@@ -21,10 +19,11 @@ class FakeAgentHost
   attr_accessor :server_version
   # Make the apt-get install exec fail (simulates a broken/interrupted install).
   attr_accessor :fail_install
-  attr_reader :package_version, :registered, :hosts, :commands, :downloads, :installs
+  attr_reader :deb_path, :package_version, :registered, :hosts, :commands, :downloads, :installs
 
-  def initialize(server_version:)
+  def initialize(server_version:, deb_path:)
     @server_version = server_version
+    @deb_path = deb_path
     @package_version = nil
     @registered = false
     @fail_install = false
@@ -82,14 +81,14 @@ class FakeAgentHost
       return output('', 1) unless installed?
 
       output("cmk-agent-ctl #{agent_ctl_version}\n", 0)
-    when %r{apt-get install .*#{Regexp.escape(DEB_PATH)}}
+    when %r{apt-get install .*#{Regexp.escape(@deb_path)}}
       return output('E: install failed', 100) if @fail_install
 
-      install_from(DEB_PATH)
+      install_from(@deb_path)
       output('', 0)
-    when %r{dpkg-deb -f #{Regexp.escape(DEB_PATH)} Version}
+    when %r{dpkg-deb -f #{Regexp.escape(@deb_path)} Version}
       # the `unless` guard: exit 0 (=> skip) when the downloaded package is already installed
-      output('', (deb_version(DEB_PATH) == @package_version) ? 0 : 1)
+      output('', (deb_version(@deb_path) == @package_version) ? 0 : 1)
     when %r{cmk-agent-ctl status}
       output('', @registered ? 1 : 0) # onlyif: exit 0 when no connections are registered
     when %r{cmk-agent-ctl register}
