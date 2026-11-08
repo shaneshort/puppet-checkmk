@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 require 'puppet/resource_api'
+require 'puppet_x/checkmk/requirements'
+
+PuppetX::Checkmk::Requirements.verify_resource_api!
 
 Puppet::ResourceApi.register_type(
   name: 'create_host',
@@ -16,8 +19,14 @@ Puppet::ResourceApi.register_type(
       }
 
     This type provides Puppet with the capabilities to create the Host in CheckMK from the CheckMK server API.
+
+    The host's existence is checked against the CheckMK API on every run (read-only, also in noop mode). The host
+    is only created when the API reports it as not found; any other API, authentication or network error fails the
+    resource. `ensure => absent` is not implemented and fails if the host exists.
+
+    Requires puppet-resource_api >= 1.8.14 (puppet-agent >= 7.8.0) (`custom_insync` feature).
   EOS
-  features: [],
+  features: ['custom_insync'],
   attributes: {
     ensure: {
       type: 'Enum[present, absent]',
