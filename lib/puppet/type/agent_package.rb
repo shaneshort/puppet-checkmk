@@ -16,8 +16,14 @@ Puppet::ResourceApi.register_type(
       }
 
     This type provides Puppet with the capabilities to download the agent package from the CheckMK server API.
+
+    The resource is `present` when `cmk-agent-ctl` is installed at the version the CheckMK server currently
+    offers. It is out of sync (and the package is downloaded) when the agent is not installed or when the server
+    offers a different agent version. Errors talking to the server fail the resource.
+
+    Requires puppet-resource_api >= 1.8.14 (`custom_insync` and `simple_get_filter` features).
   EOS
-  features: [],
+  features: ['simple_get_filter', 'custom_insync'],
   attributes: {
     ensure: {
       type: 'Enum[present, absent]',

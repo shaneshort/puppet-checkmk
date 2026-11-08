@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+**Bugfixes**
+
+- `agent_package` and `create_host` no longer report a change on every run. Their providers returned the resource
+  as `name`, but the types use `file_name`/`host_name` as their namevar, so the Resource API never matched the
+  current state and always treated the resource as `absent`. A repeat run (or noop) on a host that is already
+  registered, with the agent already installed, now reports nothing.
+- `agent_package` no longer re-downloads the package on every run. The download now only happens when the agent
+  is not installed, or when the installed `cmk-agent-ctl` version differs from the package the server offers
+  (this upgrade path could previously never run, because Puppet treats `present` -> `present` as in sync).
+- `create_host` now checks the Checkmk API for the host (read-only, also in noop) instead of always reporting it
+  as `present`, and only POSTs when the API says the host is not found.
+- Downloads are written to a temporary file and moved into place only after a complete, successful response, so a
+  failed download no longer truncates the existing package or saves an HTTP error page as the package.
+- Version matching no longer treats a version prefix as a match (`2.2.0p1` vs `2.2.0p12`).
+
+**Behaviour changes**
+
+- API, authentication and network errors now **fail the resource** (and skip dependent resources such as package
+  installation and agent registration) instead of logging a warning and reporting success. This includes 404s
+  from the download/create endpoints and refused connections. While the Checkmk server is not yet reachable
+  (e.g. first bootstrap), the Puppet run reports errors until it is.
+- `create_host` with `ensure => absent` fails if the host exists (host deletion is still not implemented),
+  instead of logging a warning and reporting success.
+- Puppet evaluates an in-sync property twice per run, so an installed agent triggers up to two read-only HEAD
+  requests per run, and `create_host` one GET.
+- The types now require `puppet-resource_api` >= 1.8.14 (`custom_insync`, and `simple_get_filter` for
+  `agent_package`). This is bundled with Puppet 7.25.
+- Known limitation (unchanged): when the server offers a newer agent, the new package is downloaded, but the
+  `package { 'check-mk-agent': ensure => installed }` resource does not upgrade an installed package, so the
+  download repeats each run until the installed version matches the server.
+
+**Testing**
+
+- Replace the stale `get_agent_package` provider spec with specs that drive both types through real Puppet
+  transactions, with HTTP (WebMock) and `cmk-agent-ctl --version` stubbed. `webmock` is added as a development
+  dependency.
+
 ## Release 0.3.3
 
 **Bugfixes**
