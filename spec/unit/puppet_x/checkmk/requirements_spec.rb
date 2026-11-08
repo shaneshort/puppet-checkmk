@@ -37,7 +37,7 @@ RSpec.describe PuppetX::Checkmk::Requirements do
   # Puppet Server runs module Ruby code in JRuby and does not add a module's lib/ directory to $LOAD_PATH, so the type
   # files must locate the helper relative to themselves. (Rspec, `puppet apply` and agents all do have lib/ on the path,
   # which is how this once slipped through.) A clean Ruby process reproduces the Puppet Server condition.
-  %w[agent_package create_host].each do |type|
+  ['agent_package', 'create_host'].each do |type|
     it "loads the #{type} type when the module's lib directory is not on $LOAD_PATH" do
       lib = File.expand_path('../../../../lib', __dir__)
       script = <<~RUBY
