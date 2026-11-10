@@ -49,6 +49,11 @@ class checkmk::install::server {
 
       file { "/opt/omd/sites/${checkmk::site_name}/var/check_mk/web/automation/automation.secret":
         ensure  => file,
+        # OMD creates this file owned by the site user (same name as the site) and Checkmk flags any other
+        # owner or mode as incorrect, so keep it that way.
+        owner   => $checkmk::site_name,
+        group   => $checkmk::site_name,
+        mode    => '0660',
         content => inline_epp('<%= $automation_user_password %>', { 'automation_user_password' => $checkmk::automation_user_password }), # Sensitive.new($checkmk::automation_user_password)
         require => Exec["create omd site ${checkmk::site_name}"],
       }
