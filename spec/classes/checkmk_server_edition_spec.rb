@@ -40,4 +40,13 @@ describe 'checkmk' do
 
     it { is_expected.to contain_file('/tmp/check-mk-community.deb').with_source('https://example.com/x.deb') }
   end
+
+  context 'automation.secret' do
+    let(:params) { base_params.merge('version' => '2.5.0p18', 'site_name' => 'mysite') }
+
+    it 'is owned by the site user with the mode Checkmk expects' do
+      is_expected.to contain_file('/opt/omd/sites/mysite/var/check_mk/web/automation/automation.secret')
+        .with(ensure: 'file', owner: 'mysite', group: 'mysite', mode: '0660')
+    end
+  end
 end
