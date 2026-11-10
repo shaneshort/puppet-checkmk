@@ -7,10 +7,11 @@ class checkmk::install::server {
   case $facts['os']['family'] {
     'Debian': {
       # Checkmk 2.5 renamed the free edition package from `check-mk-raw` to `check-mk-community`.
+      # Only versions that clearly parse as older than 2.5 use `raw`; everything else is `community`.
       $version_parts = $checkmk::version.match(/^(\d+)\.(\d+)/)
-      $edition = ($version_parts and versioncmp("${version_parts[1]}.${version_parts[2]}", '2.5') >= 0) ? {
-        true    => 'community',
-        default => 'raw',
+      $edition = ($version_parts and versioncmp("${version_parts[1]}.${version_parts[2]}", '2.5') < 0) ? {
+        true    => 'raw',
+        default => 'community',
       }
 
       if $checkmk::download_url {

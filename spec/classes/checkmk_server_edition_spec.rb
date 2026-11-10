@@ -20,6 +20,8 @@ describe 'checkmk' do
     '2.5.0' => 'community',
     '2.10.0p1' => 'community',
     '3.0.0' => 'community',
+    '2.5.0-2026.01.01' => 'community',
+    'daily' => 'community',
     '2.4.0p1' => 'raw',
     '2.1.0p14' => 'raw',
   }.each do |version, edition|
