@@ -8,6 +8,10 @@
   `check-mk-community`, so the hardcoded `check-mk-raw-<version>` download URL returned 404. `checkmk::install::server`
   now uses `raw` only for versions older than 2.5 and `community` for everything else (2.5 and later), in the download URL, the package name and the
   downloaded file (`/tmp/check-mk-<edition>.deb`). An explicit `download_url` is still used as given.
+- `automation.secret` in server mode now explicitly sets the site user and group as owner and mode `0660`, which is
+  what OMD creates and what Checkmk expects (it flags other owners/modes as incorrect on update). The module did not
+  set these before, so a top-scope `File` default (e.g. `owner => root, mode => '0644'` in `site.pp`) was applied to
+  it and fought with Checkmk on every run.
 
 - Fix catalogue compilation failing on Puppet Server with `Could not autoload puppet/type/agent_package: no such file
   to load -- puppet_x/checkmk/requirements`. Puppet Server (JRuby) does not put a module's `lib/` directory on
