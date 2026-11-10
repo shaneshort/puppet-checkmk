@@ -4,6 +4,11 @@
 
 **Bugfixes**
 
+- Server mode now installs Checkmk 2.5 and later. Checkmk 2.5 renamed the free edition package from `check-mk-raw` to
+  `check-mk-community`, so the hardcoded `check-mk-raw-<version>` download URL returned 404. `checkmk::install::server`
+  now uses `community` for versions >= 2.5 and `raw` for older ones, in the download URL, the package name and the
+  downloaded file (`/tmp/check-mk-<edition>.deb`). An explicit `download_url` is still used as given.
+
 - Fix catalogue compilation failing on Puppet Server with `Could not autoload puppet/type/agent_package: no such file
   to load -- puppet_x/checkmk/requirements`. Puppet Server (JRuby) does not put a module's `lib/` directory on
   `$LOAD_PATH`, so the types now load their helper with `require_relative`. This broke every node using the module

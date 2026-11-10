@@ -6,30 +6,37 @@ class checkmk::install::server {
 
   case $facts['os']['family'] {
     'Debian': {
+      # Checkmk 2.5 renamed the free edition package from `check-mk-raw` to `check-mk-community`.
+      $version_parts = $checkmk::version.match(/^(\d+)\.(\d+)/)
+      $edition = ($version_parts and versioncmp("${version_parts[1]}.${version_parts[2]}", '2.5') >= 0) ? {
+        true    => 'community',
+        default => 'raw',
+      }
+
       if $checkmk::download_url {
         $download_url = $checkmk::download_url
       } else {
-        $download_url = "https://download.checkmk.com/checkmk/${checkmk::version}/check-mk-raw-${checkmk::version}_0.${facts['os']['distro']['codename']}_amd64.deb"
+        $download_url = "https://download.checkmk.com/checkmk/${checkmk::version}/check-mk-${edition}-${checkmk::version}_0.${facts['os']['distro']['codename']}_amd64.deb"
       }
 
-      file { '/tmp/check-mk-raw.deb':
+      file { "/tmp/check-mk-${edition}.deb":
         ensure         => file,
         source         => $download_url,
         checksum       => 'sha256',
         checksum_value => $checkmk::sha256_hash,
       }
 
-      package { "check-mk-raw-${checkmk::version}":
+      package { "check-mk-${edition}-${checkmk::version}":
         ensure   => installed,
         provider => 'apt',
-        source   => '/tmp/check-mk-raw.deb',
-        require  => File['/tmp/check-mk-raw.deb'],
+        source   => "/tmp/check-mk-${edition}.deb",
+        require  => File["/tmp/check-mk-${edition}.deb"],
       }
 
       exec { "create omd site ${checkmk::site_name}":
         command => "/usr/bin/omd create ${checkmk::site_name}",
         creates => "/opt/omd/sites/${checkmk::site_name}",
-        require => Package["check-mk-raw-${checkmk::version}"],
+        require => Package["check-mk-${edition}-${checkmk::version}"],
       }
 
       exec { 'checkmk_cmkadmin_password':
